@@ -1,19 +1,29 @@
 #!/usr/bin/env python
-
 import rospy
 import os
 
-from std_msgs.msg import Empty
-from std_msgs.msg import String
-
+from std_msgs.msg import Empty, String
+from std_srvs import srv
 
 def rebootCallback(x):
     rospy.loginfo("Reboot command invoked")
+    rospy.logdebug("Calling Jetson reboot service")
+    try:
+        rospy.wait_for_service("/leo_system/jetson_reboot", 2)
+        resp = jetson_reboot_srv(srv.EmptyRequest())
+    except rospy.ROSException as e:
+        rospy.logerr(e)
     os.system("shutdown -r now")
 
 
 def shutdownCallback(x):
     rospy.loginfo("Shutdown command invoked")
+    rospy.logdebug("Calling Jetson shutdown service")
+    try:
+        rospy.wait_for_service("/leo_system/jetson_shutdown", 2)
+        resp = jetson_shutdown_srv(srv.EmptyRequest())
+    except rospy.ROSException as e:
+        rospy.logerr(e)
     os.system("shutdown -h now")
 
 
@@ -23,10 +33,19 @@ def publishNamespace():
     namespace_pub.publish(namespace)
 
 
+def initialise():
+    rospy.wait_for_service("/leo_system/jetson_shutdown", 5)
+    rospy.wait_for_service("/leo_system/jetson_reboot", 5)
+    global jetson_reboot_srv, jetson_shutdown_srv
+    jetson_reboot_srv = rospy.ServiceProxy("/leo_system/jetson_reboot", Empty)
+    jetson_shutdown_srv = rospy.ServiceProxy("/leo_system/jetson_shutdown", Empty)
+
+
 try:
     rospy.init_node("leo_system")
-    pose_sub = rospy.Subscriber("system/shutdown", Empty, shutdownCallback)
-    pose_sub = rospy.Subscriber("system/reboot", Empty, rebootCallback)
+    initialise()
+    shutdown_sub = rospy.Subscriber("/leo_system/shutdown", Empty, shutdownCallback)
+    reboot_sub = rospy.Subscriber("/leo_system/reboot", Empty, rebootCallback)
     rospy.loginfo("Leo system node started!")
 
     publishNamespace()
